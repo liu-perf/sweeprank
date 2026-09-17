@@ -1,0 +1,184 @@
+name: ci
+
+# CPU only. No GPU, no torch, no CUDA, no network. Everything below is
+# arithmetic over the JSON in data/ -- which is the point of the split:
+# producing those measurements needed an eight-card node, and re-checking the
+# conclusions drawn from them must not need anything.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: pytest -q
+      - run: python -m compileall -q sweeprank
+
+      # The device, on the thing it exists to forbid. A proxy that has not been
+      # checked must not be able to name a winner by omission.
+      - name: an unchecked proxy still cannot select
+        run: |
+          python - <<'PY'
+          from sweeprank.role import PROXY, RoleError, assert_may_select
+          for kwargs in ({}, {"concordant": False}):
+              try:
+                  assert_may_select("util", PROXY, **kwargs)
+              except RoleError:
+                  continue
+              raise SystemExit(f"a proxy selected with {kwargs}")
+          assert_may_select("util", PROXY, concordant=True)
+          print("the gate holds in both directions")
+          PY
+
+      - name: a metric with no role is still refused
+        run: |
+          python - <<'PY'
+          from sweeprank.model import Sweep
+          from sweeprank.role import UndeclaredRoleError
+          raw = {"sweep_id": "t",
+                 "metrics": {"a": {"higher_is_better": True}},
+                 "configs": [{"id": "x", "values": {"a": 1.0}}]}
+          try:
+              Sweep.from_dict(raw)
+          except UndeclaredRoleError:
+              print("undeclared role still raises")
+          else:
+              raise SystemExit("a table of floats loaded as a sweep")
+          PY
+
+      # The conclusions, as build gates. If the sweeps are re-run on another
+      # node and the prose is not, these fail -- which is the intent.
+      - name: the stated goal still rejects the fastest cell
+        run: |
+          sweeprank goal det_tune | tee /tmp/g.txt
+          grep -q "rejects det_b24nw16" /tmp/g.txt
+          grep -q "it selects det_b24nw16pin instead" /tmp/g.txt
+          grep -q "power_mean_w +7.58%" /tmp/g.txt
+
+      - name: the proxy still ranks the winner last of the three live candidates
+        run: |
+          python - <<'PY'
+          from sweeprank import analysis
+          r = analysis.the_reversal()
+          assert r["objective_winner"] == "det_b24nw16", r
+          assert r["objective_winner_is_last_under_proxy_of_top3"], r
+          assert r["proxy_picks_a_different_winner"], r
+          # and the claim this repository declines to make stays declined
+          assert not r["exactly_reversed"] and not r["top3_exactly_reversed"], r
+          print("winner ranks", r["objective_winner_rank_under_proxy_of_top3"], "of 3")
+          PY
+
+      # A resolution, not a verdict. Without the control the finding reads as
+      # "never look at utilisation", and the control says otherwise.
+      - name: the control still keeps the bracket from becoming a verdict
+        run: |
+          python - <<'PY'
+          from sweeprank import analysis
+          r = analysis.proxy_resolution()
+          assert r["blind_at_or_below"] < r["sound_at_or_above"], r
+          c = r["control"]
+          assert c["concordant"], c
+          assert abs(c["objective_change_pct"] - c["proxy_change_pct"]) < 10.0, c
+          assert not r["control_is_inside_bracket"], r
+          print("bracket %.4f..%.4f, control concordant at %+.1f%%"
+                % (r["blind_at_or_below"], r["sound_at_or_above"],
+                   c["objective_change_pct"]))
+          PY
+
+      - name: the eight-card loss is still recorded as unattributed
+        run: |
+          python - <<'PY'
+          from sweeprank import analysis
+          e = analysis.eight_card_attribution()
+          assert e["verdict"] == "unattributed", e
+          d, g = e["workloads"]["det_scale"], e["workloads"]["seg_scale"]
+          # The counterexample that keeps the idle explanation out has to survive.
+          assert abs(d["loss_vs_ideal_pct"] - g["loss_vs_ideal_pct"]) < 2.0, e
+          assert g["sm_zero_frac_pct_8gpu"] <= 0.1 < d["sm_zero_frac_pct_8gpu"], e
+          print("comparable loss, %.0fx less idle" % (d["sm_zero_frac_pct_8gpu"]
+                                                      / max(g["sm_zero_frac_pct_8gpu"], 1e-9)))
+          PY
+
+      - name: the exclusion still contradicts its own stated direction
+        run: |
+          sweeprank exclusions det_scale | tee /tmp/e.txt
+          grep -q "the opposite way from the stated reason" /tmp/e.txt
+          grep -q "left uncorrected" /tmp/e.txt
+          python - <<'PY'
+          from sweeprank import analysis
+          d = analysis.straggler_bound()
+          assert d["direction"]["contradicted"], d
+          assert not d["direction"]["is_the_outlier"], d
+          # and taken at face value it is still too small to be the story
+          assert d["size"]["share_of_loss_explained_pct"] < 15.0, d
+          print("bounds %.1f%% of the loss" % d["size"]["share_of_loss_explained_pct"])
+          PY
+
+      - name: one column, one baseline
+        run: |
+          sweeprank derived det_scale | tee /tmp/d.txt
+          grep -q "2 different baselines" /tmp/d.txt
+          grep -q "does not make it a scaling efficiency" /tmp/d.txt
+          # Both halves of the column are individually correct, and that is the
+          # difficulty: no arithmetic check finds anything.
+          python - <<'PY'
+          from sweeprank import baseline
+          from sweeprank.model import bundled, bundled_names
+          all_ = {n: bundled(n) for n in bundled_names()}
+          rows = baseline.recompute(all_["det_scale"], others=all_)
+          checked = [r for r in rows if r["agrees"] is not None]
+          assert checked and all(r["agrees"] for r in checked), checked
+          print("every published ratio reproduces:", len(checked))
+          PY
+
+      # A malformed comparison is not a small number, it is a wrong question.
+      - name: cells at different scales still do not form a pair
+        run: |
+          python - <<'PY'
+          from sweeprank.model import bundled
+          from sweeprank.rank import pairs, resolution
+          s = bundled("det_scale")
+          assert s.strata == ["ngpu"], s.strata
+          ps = pairs(s, "sm_util_mean_pct")
+          assert len(ps) == 1 and {ps[0]["a"], ps[0]["b"]} == {
+              "det_opt_4gpu", "det_opt_4gpuX"}, ps
+          r = resolution(s, "sm_util_mean_pct")
+          for k in ("blind_at_or_below", "sound_at_or_above"):
+              assert r[k] is None or r[k] < 1.0, (k, r[k])
+          print("one within-stratum pair, as it should be")
+          PY
+
+      # Every sweep here has one run per cell. A conclusion that needs more has
+      # to say so out loud, and the warning is machine-readable.
+      - name: the single-run limit is still declared
+        run: |
+          python - <<'PY'
+          from sweeprank.model import bundled, bundled_names
+          for n in bundled_names():
+              s = bundled(n)
+              assert s.provenance.get("repeats") is not None, n
+          PY
+          # `--fail-on warn` must exit non-zero here, so the assertion is an
+          # `if`, not `&& exit 1 || true`: `exit` kills the shell before `||`
+          # can see it, and three sibling repositories shipped a red CI on
+          # exactly that shape.
+          if sweeprank --fail-on warn rank governor_control; then
+            echo "the single-run warning is no longer emitted" >&2
+            exit 1
+          fi
+          sweeprank rank governor_control | grep -q "run per cell"
+
+      - name: the report is still loud
+        run: |
+          test "$(sweeprank check | grep -c '\[error\]')" -eq 7

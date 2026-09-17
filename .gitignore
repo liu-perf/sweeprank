@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# A sweep exported from a real run may carry the host it ran on, the chassis it
+# lives in and the customer it belongs to. The card model and the numbers are
+# public; the identity of the machine is not. Sweeps that arrive here from
+# somewhere else stay local, and the four in data/ are the ones that were
+# de-identified on purpose.
+*.local.json
+sweeps/

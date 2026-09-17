@@ -1,0 +1,250 @@
+{
+  "sweep_id": "det_scale",
+  "what": "Multi-card scaling sweep for the same detection training run, all cells at the tuned single-card configuration (batch 24 / workers 32 / pin True).",
+  "provenance": {
+    "hardware": "eight NVIDIA GeForce RTX 5090, 32607 MiB each, two sockets",
+    "topology_note": "Cards 0-3 sit on one socket and 4-7 on the other. Each socket's memory channels are half-populated: half the channels carry a module, half are empty. The 4-card cells are the same-socket set {0,1,2,3} and the cross-socket set {0,1,4,5}.",
+    "cpu_governor": "performance",
+    "workload": "YOLOX-L, mmdetection, --amp, DDP",
+    "window": "240 s of steady state per cell, first 25% of logged steps discarded",
+    "repeats": 1
+  },
+  "strata": [
+    "ngpu"
+  ],
+  "strata_note": "Total throughput across a different number of cards is not a choice between two configurations at the same scale, so pairwise ranking questions are asked only within a card count. The four-card stratum is the one with two cells in it.",
+  "metrics": {
+    "throughput_img_s": {
+      "role": "objective",
+      "higher_is_better": true,
+      "unit": "img/s"
+    },
+    "sm_util_mean_pct": {
+      "role": "proxy",
+      "higher_is_better": true,
+      "unit": "%"
+    },
+    "sm_zero_frac_pct": {
+      "role": "diagnostic",
+      "higher_is_better": false,
+      "unit": "%",
+      "note": "Fraction of dmon samples reading SM = 0 on a participating card. The only diagnostic here that moves with card count."
+    },
+    "power_mean_w": {
+      "role": "cost",
+      "higher_is_better": false,
+      "unit": "W"
+    },
+    "step_time_s": {
+      "role": "diagnostic",
+      "higher_is_better": false,
+      "unit": "s"
+    }
+  },
+  "derived": [
+    {
+      "name": "speedup",
+      "formula": "ratio_to_baseline",
+      "of": "throughput_img_s",
+      "note": "As reported in the summary table this column was built against two different baselines. The per-row baselines below are what the numbers in `reported` were actually divided by -- transcribed, not guessed. `sweeprank derived` refuses the column for that reason.",
+      "baselines": {
+        "det_tune:det_1gpu": [
+          "single_bs8",
+          "single_bs24nw8",
+          "single_bs24nw32",
+          "single_bs24nw32pin"
+        ],
+        "det_opt_1gpu": [
+          "det_opt_2gpu",
+          "det_opt_4gpu",
+          "det_opt_4gpuX",
+          "det_opt_8gpu"
+        ]
+      },
+      "reported": {
+        "single_bs8": 1.0,
+        "single_bs24nw8": 1.17,
+        "single_bs24nw32": 1.18,
+        "single_bs24nw32pin": 1.18,
+        "det_opt_2gpu": 1.98,
+        "det_opt_4gpu": 3.72,
+        "det_opt_4gpuX": 3.91,
+        "det_opt_8gpu": 6.13
+      }
+    },
+    {
+      "name": "efficiency",
+      "formula": "speedup_over_units",
+      "of": "speedup",
+      "units_knob": "ngpu",
+      "note": "speedup / ngpu. On the single-card rows ngpu is 1, so this column reprints a batch-size speedup under the name 'scaling efficiency' and prints values above 100%.",
+      "reported": {
+        "single_bs8": 100.0,
+        "single_bs24nw8": 117.0,
+        "single_bs24nw32": 118.3,
+        "single_bs24nw32pin": 118.4,
+        "det_opt_2gpu": 98.9,
+        "det_opt_4gpu": 93.1,
+        "det_opt_4gpuX": 97.9,
+        "det_opt_8gpu": 76.6
+      }
+    }
+  ],
+  "configs": [
+    {
+      "id": "det_opt_1gpu",
+      "knobs": {
+        "ngpu": 1,
+        "gpus": "0",
+        "placement": "single",
+        "batch_per_gpu": 24,
+        "num_workers": 32,
+        "pin_memory": true
+      },
+      "values": {
+        "throughput_img_s": 83.76,
+        "sm_util_mean_pct": 74.6,
+        "sm_zero_frac_pct": 0.0,
+        "power_mean_w": 353.0,
+        "step_time_s": 0.2865
+      },
+      "per_unit": {
+        "sm_util_mean_pct": {
+          "0": 74.6
+        }
+      }
+    },
+    {
+      "id": "det_opt_2gpu",
+      "knobs": {
+        "ngpu": 2,
+        "gpus": "0,1",
+        "placement": "same_socket",
+        "batch_per_gpu": 24,
+        "num_workers": 32,
+        "pin_memory": true
+      },
+      "values": {
+        "throughput_img_s": 165.6,
+        "sm_util_mean_pct": 71.5,
+        "sm_zero_frac_pct": 0.5,
+        "power_mean_w": 346.5,
+        "step_time_s": 0.2898
+      },
+      "per_unit": {
+        "sm_util_mean_pct": {
+          "0": 71.8,
+          "1": 71.2
+        }
+      }
+    },
+    {
+      "id": "det_opt_4gpu",
+      "knobs": {
+        "ngpu": 4,
+        "gpus": "0,1,2,3",
+        "placement": "same_socket",
+        "batch_per_gpu": 24,
+        "num_workers": 32,
+        "pin_memory": true
+      },
+      "values": {
+        "throughput_img_s": 311.84,
+        "sm_util_mean_pct": 71.3,
+        "sm_zero_frac_pct": 0.5,
+        "power_mean_w": 345.4,
+        "step_time_s": 0.3078
+      },
+      "per_unit": {
+        "sm_util_mean_pct": {
+          "0": 71.8,
+          "1": 71.2,
+          "2": 68.5,
+          "3": 73.9
+        }
+      }
+    },
+    {
+      "id": "det_opt_4gpuX",
+      "knobs": {
+        "ngpu": 4,
+        "gpus": "0,1,4,5",
+        "placement": "cross_socket",
+        "batch_per_gpu": 24,
+        "num_workers": 32,
+        "pin_memory": true
+      },
+      "values": {
+        "throughput_img_s": 327.89,
+        "sm_util_mean_pct": 74.3,
+        "sm_zero_frac_pct": 0.5,
+        "power_mean_w": 329.0,
+        "step_time_s": 0.2928
+      },
+      "per_unit": {
+        "sm_util_mean_pct": {
+          "0": 76.6,
+          "1": 76.2,
+          "4": 71.0,
+          "5": 73.5
+        }
+      }
+    },
+    {
+      "id": "det_opt_8gpu",
+      "knobs": {
+        "ngpu": 8,
+        "gpus": "0,1,2,3,4,5,6,7",
+        "placement": "both_sockets",
+        "batch_per_gpu": 24,
+        "num_workers": 32,
+        "pin_memory": true
+      },
+      "values": {
+        "throughput_img_s": 513.52,
+        "sm_util_mean_pct": 65.8,
+        "sm_zero_frac_pct": 6.0,
+        "power_mean_w": 299.0,
+        "step_time_s": 0.3739
+      },
+      "per_unit": {
+        "sm_util_mean_pct": {
+          "0": 60.9,
+          "1": 64.9,
+          "2": 68.5,
+          "3": 70.2,
+          "4": 65.6,
+          "5": 67.3,
+          "6": 65.3,
+          "7": 63.5
+        },
+        "sm_zero_frac_pct": {
+          "0": 7.7,
+          "1": 7.6,
+          "2": 2.2,
+          "3": 4.4,
+          "4": 5.5,
+          "5": 6.6,
+          "6": 5.5,
+          "7": 8.8
+        }
+      },
+      "exclusions": [
+        {
+          "unit": "7",
+          "metric": "sm_util_mean_pct",
+          "reason": "A CUDA context left behind by an earlier profiling run kept nvidia-smi utilization.gpu pinned at 100% on this card with 0 MiB allocated.",
+          "claimed_direction": "high",
+          "claimed_direction_quoted_from": "the summary's own wording: this card's SM reading is not trustworthy, so the eight-card row also reports a value with card 7 excluded",
+          "reported_aggregate_without": 66.1,
+          "also_measured": {
+            "what": "a dense GEMM on this card versus card 0, same shape, same run",
+            "this_unit_tflops": 218.2,
+            "reference_unit_tflops": 223.5,
+            "gap_pct": 2.4
+          }
+        }
+      ]
+    }
+  ]
+}

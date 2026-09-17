@@ -1,0 +1,126 @@
+{
+  "sweep_id": "seg_scale",
+  "what": "The same scaling sweep on a different workload: KNet-Swin-L segmentation, batch 2 per card. An independent second look at the two questions det_scale raises.",
+  "provenance": {
+    "hardware": "the same eight-card node as det_scale",
+    "topology_note": "Same sockets and same half-populated channels. The 4-card cells are again {0,1,2,3} same-socket and {0,1,4,5} cross-socket.",
+    "cpu_governor": "performance",
+    "workload": "KNet-Swin-L, mmsegmentation, --amp, DDP, batch 2 per card",
+    "window": "360 s of steady state per cell, first 25% of logged steps discarded",
+    "repeats": 1,
+    "why_it_matters": "This sweep shares the node and the harness with det_scale but not the model, the batch size, the memory footprint or the collective volume. Anything that shows up in both is not a property of one model."
+  },
+  "strata": [
+    "ngpu"
+  ],
+  "strata_note": "Same reason as det_scale: pairwise questions only within a card count.",
+  "metrics": {
+    "throughput_img_s": {
+      "role": "objective",
+      "higher_is_better": true,
+      "unit": "img/s"
+    },
+    "sm_util_mean_pct": {
+      "role": "proxy",
+      "higher_is_better": true,
+      "unit": "%"
+    },
+    "sm_zero_frac_pct": {
+      "role": "diagnostic",
+      "higher_is_better": false,
+      "unit": "%"
+    },
+    "power_mean_w": {
+      "role": "cost",
+      "higher_is_better": false,
+      "unit": "W"
+    },
+    "step_time_s": {
+      "role": "diagnostic",
+      "higher_is_better": false,
+      "unit": "s"
+    }
+  },
+  "configs": [
+    {
+      "id": "seg_1gpu",
+      "knobs": {
+        "ngpu": 1,
+        "gpus": "0",
+        "placement": "single",
+        "batch_per_gpu": 2
+      },
+      "values": {
+        "throughput_img_s": 11.41,
+        "sm_util_mean_pct": 81.8,
+        "sm_zero_frac_pct": 0.0,
+        "power_mean_w": 343.9,
+        "step_time_s": 0.1752
+      }
+    },
+    {
+      "id": "seg_2gpu",
+      "knobs": {
+        "ngpu": 2,
+        "gpus": "0,1",
+        "placement": "same_socket",
+        "batch_per_gpu": 2
+      },
+      "values": {
+        "throughput_img_s": 20.47,
+        "sm_util_mean_pct": 84.5,
+        "sm_zero_frac_pct": 0.0,
+        "power_mean_w": 332.0,
+        "step_time_s": 0.1954
+      }
+    },
+    {
+      "id": "seg_4gpu",
+      "knobs": {
+        "ngpu": 4,
+        "gpus": "0,1,2,3",
+        "placement": "same_socket",
+        "batch_per_gpu": 2
+      },
+      "values": {
+        "throughput_img_s": 38.74,
+        "sm_util_mean_pct": 83.5,
+        "sm_zero_frac_pct": 0.0,
+        "power_mean_w": 342.7,
+        "step_time_s": 0.2065
+      }
+    },
+    {
+      "id": "seg_4gpuX",
+      "knobs": {
+        "ngpu": 4,
+        "gpus": "0,1,4,5",
+        "placement": "cross_socket",
+        "batch_per_gpu": 2
+      },
+      "values": {
+        "throughput_img_s": 39.96,
+        "sm_util_mean_pct": 85.3,
+        "sm_zero_frac_pct": 0.0,
+        "power_mean_w": 325.7,
+        "step_time_s": 0.2002
+      }
+    },
+    {
+      "id": "seg_8gpu",
+      "knobs": {
+        "ngpu": 8,
+        "gpus": "0,1,2,3,4,5,6,7",
+        "placement": "both_sockets",
+        "batch_per_gpu": 2
+      },
+      "values": {
+        "throughput_img_s": 71.29,
+        "sm_util_mean_pct": 82.1,
+        "sm_zero_frac_pct": 0.1,
+        "power_mean_w": 330.7,
+        "step_time_s": 0.2244
+      }
+    }
+  ]
+}

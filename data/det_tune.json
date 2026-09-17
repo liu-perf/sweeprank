@@ -1,0 +1,110 @@
+{
+  "sweep_id": "det_tune",
+  "what": "Single-card dataloader tuning sweep for a YOLOX-L detection training run. Seven configurations, one card, 240 s of steady state each, warmup discarded.",
+  "provenance": {
+    "hardware": "one NVIDIA GeForce RTX 5090, 32607 MiB, in an eight-card node",
+    "cpu_governor": "performance",
+    "workload": "YOLOX-L, mmdetection, --amp, images/s measured from the training log",
+    "window": "240 s of steady state per configuration, first 25% of logged steps discarded as warmup",
+    "repeats": 1,
+    "note": "One run per cell. That is the honest limit of this sweep and every conclusion below is written to survive it -- see `sweeprank rank --resolution`."
+  },
+  "metrics": {
+    "throughput_img_s": {
+      "role": "objective",
+      "higher_is_better": true,
+      "unit": "img/s",
+      "note": "The quantity the sweep exists to maximise. Derived as batch/step_time from the training log, not from any counter."
+    },
+    "sm_util_mean_pct": {
+      "role": "proxy",
+      "higher_is_better": true,
+      "unit": "%",
+      "note": "nvidia-smi dmon SM%, mean over the steady-state window. The sweep's stated goal was written on this metric."
+    },
+    "power_mean_w": {
+      "role": "cost",
+      "higher_is_better": false,
+      "unit": "W",
+      "note": "A cost may report and may veto; it may never select."
+    },
+    "mem_peak_mib": {
+      "role": "cost",
+      "higher_is_better": false,
+      "unit": "MiB"
+    },
+    "step_time_s": {
+      "role": "diagnostic",
+      "higher_is_better": false,
+      "unit": "s"
+    },
+    "data_time_frac_pct": {
+      "role": "diagnostic",
+      "higher_is_better": false,
+      "unit": "%",
+      "note": "Fraction of the step spent waiting on the dataloader. Explains; never selects."
+    }
+  },
+  "declared_goal": {
+    "metric": "sm_util_mean_pct",
+    "op": ">=",
+    "value": 70.0,
+    "quoted_from": "the sweep's own header line: target SM utilisation >= 70%, baseline batch 8 / workers 8 / pin False -> SM 61.4%, 70.74 img/s"
+  },
+  "configs": [
+    {
+      "id": "det_1gpu",
+      "knobs": {"batch": 8, "num_workers": 8, "pin_memory": false},
+      "values": {
+        "throughput_img_s": 70.74, "sm_util_mean_pct": 61.4, "power_mean_w": 279.5,
+        "mem_peak_mib": 13166, "step_time_s": 0.1131, "data_time_frac_pct": 6.8
+      }
+    },
+    {
+      "id": "det_b16",
+      "knobs": {"batch": 16, "num_workers": 8, "pin_memory": false},
+      "values": {
+        "throughput_img_s": 81.16, "sm_util_mean_pct": 65.1, "power_mean_w": 315.8,
+        "mem_peak_mib": 25408, "step_time_s": 0.1971, "data_time_frac_pct": 6.9
+      }
+    },
+    {
+      "id": "det_b24",
+      "knobs": {"batch": 24, "num_workers": 8, "pin_memory": false},
+      "values": {
+        "throughput_img_s": 82.79, "sm_util_mean_pct": 66.7, "power_mean_w": 334.5,
+        "mem_peak_mib": 30004, "step_time_s": 0.2899, "data_time_frac_pct": 6.5
+      }
+    },
+    {
+      "id": "det_b32",
+      "knobs": {"batch": 32, "num_workers": 8, "pin_memory": false},
+      "failed": "CUDA out of memory: tried to allocate 158.00 MiB with 115.56 MiB free of 31.36 GiB",
+      "values": {}
+    },
+    {
+      "id": "det_b24nw16",
+      "knobs": {"batch": 24, "num_workers": 16, "pin_memory": false},
+      "values": {
+        "throughput_img_s": 86.54, "sm_util_mean_pct": 68.7, "power_mean_w": 329.8,
+        "mem_peak_mib": 31030, "step_time_s": 0.2773, "data_time_frac_pct": 6.3
+      }
+    },
+    {
+      "id": "det_b24nw32",
+      "knobs": {"batch": 24, "num_workers": 32, "pin_memory": false},
+      "values": {
+        "throughput_img_s": 83.70, "sm_util_mean_pct": 70.1, "power_mean_w": 335.1,
+        "mem_peak_mib": 30292, "step_time_s": 0.2868, "data_time_frac_pct": 6.1
+      }
+    },
+    {
+      "id": "det_b24nw16pin",
+      "knobs": {"batch": 24, "num_workers": 16, "pin_memory": true},
+      "values": {
+        "throughput_img_s": 85.79, "sm_util_mean_pct": 73.6, "power_mean_w": 354.8,
+        "mem_peak_mib": 30304, "step_time_s": 0.2798, "data_time_frac_pct": 0.8
+      }
+    }
+  ]
+}

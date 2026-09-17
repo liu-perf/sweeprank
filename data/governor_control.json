@@ -1,0 +1,32 @@
+{
+  "sweep_id": "governor_control",
+  "what": "The control. Two cells, identical in every knob the tuning sweep touched, differing only in the CPU frequency governor. Its whole job is to stop the conclusion from being read as 'SM utilisation is useless'.",
+  "provenance": {
+    "hardware": "one NVIDIA GeForce RTX 5090, 32607 MiB",
+    "workload": "YOLOX-L, mmdetection, --amp, batch 8 / workers 8 / pin False in both cells",
+    "window": "240 s of steady state per cell",
+    "repeats": 1,
+    "why_it_matters": "In det_tune the proxy ranks the configurations backwards. If that were the whole story the honest conclusion would be 'never look at SM utilisation'. This pair says otherwise: over a change this large the proxy tracks the objective, in the right direction and to within a few points of the same relative size. A proxy has a resolution, and a resolution is a number, not a verdict."
+  },
+  "metrics": {
+    "throughput_img_s": {"role": "objective", "higher_is_better": true, "unit": "img/s"},
+    "sm_util_mean_pct": {"role": "proxy", "higher_is_better": true, "unit": "%"},
+    "power_mean_w": {"role": "cost", "higher_is_better": false, "unit": "W"},
+    "step_time_s": {"role": "diagnostic", "higher_is_better": false, "unit": "s"},
+    "data_time_frac_pct": {"role": "diagnostic", "higher_is_better": false, "unit": "%"}
+  },
+  "configs": [
+    {
+      "id": "governor_powersave",
+      "knobs": {"governor": "powersave", "batch": 8, "num_workers": 8, "pin_memory": false},
+      "values": {"throughput_img_s": 31.44, "sm_util_mean_pct": 27.8,
+                 "power_mean_w": 165.4, "step_time_s": 0.2544, "data_time_frac_pct": 9.7}
+    },
+    {
+      "id": "governor_performance",
+      "knobs": {"governor": "performance", "batch": 8, "num_workers": 8, "pin_memory": false},
+      "values": {"throughput_img_s": 70.74, "sm_util_mean_pct": 61.4,
+                 "power_mean_w": 279.5, "step_time_s": 0.1131, "data_time_frac_pct": 6.8}
+    }
+  ]
+}
