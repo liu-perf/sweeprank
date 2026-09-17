@@ -144,8 +144,8 @@ def shim_path(tmp_path_factory):
                        ("ruff", "-m ruff"),
                        ("python", ""), ("python3", "")):
         p = d / name
-        p.write_text(f'#!/bin/sh\nexec "{exe}" {args} "$@"\n', encoding="utf-8",
-                     newline="\n")
+        with open(p, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(f'#!/bin/sh\nexec "{exe}" {args} "$@"\n')
         p.chmod(0o755)
     return str(d).replace("\\", "/")
 
